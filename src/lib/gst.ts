@@ -182,8 +182,30 @@ export function gstPeriod(d: Date): string {
 /** QK/26-27/000001: unique and consecutive per series and financial year, at most 16 characters. */
 export function invoiceNumber(series: string, fy: string, seq: number): string {
   const n = `${series}/${fy.slice(2)}/${String(seq).padStart(6, "0")}`;
-  if (n.length > 16) throw new Error(`Invoice number ${n} is longer than 16 characters`);
+  // CGST Rule 46(b): at most 16 characters, only letters, digits, "-" and "/".
+  if (!/^[A-Za-z0-9/-]{1,16}$/.test(n)) throw new Error(`Invoice number ${n} breaks CGST Rule 46(b)`);
   return n;
+}
+
+/** Splits QK/26-27/000153 into its series, financial year ("2026-27") and number, or null. */
+export function parseInvoiceNumber(n: string): { series: string; fy: string; seq: number } | null {
+  const m = /^([A-Z0-9]{1,3})\/(\d{2})-(\d{2})\/(\d{6})$/.exec(n.trim().toUpperCase());
+  if (!m || (Number(m[2]) + 1) % 100 !== Number(m[3])) return null;
+  return { series: m[1], fy: `20${m[2]}-${m[3]}`, seq: Number(m[4]) };
+}
+
+/**
+ * The last number already used for a series and year outside this service,
+ * from SERIES_START ("QK/26-27/000153,RC/26-27/000020"). Bills here then
+ * continue the series (000154...) instead of reusing a number.
+ */
+export function seriesStart(series: string, fy: string, env: Record<string, string | undefined> = process.env): number {
+  let last = 0;
+  for (const part of (env.SERIES_START ?? "").split(/[,;\s]+/)) {
+    const p = parseInvoiceNumber(part);
+    if (p && p.series === series && p.fy === fy) last = Math.max(last, p.seq);
+  }
+  return last;
 }
 
 /** Paise as "1180.00", for invoices and CSVs. */

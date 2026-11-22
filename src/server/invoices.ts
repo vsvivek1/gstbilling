@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { db as defaultDb, type DB } from "@/db";
 import { invoiceCounters, invoices, type Invoice } from "@/db/schema";
-import { financialYear, gstReady, gstSeller, invoiceNumber, isGstin, isSeries, placeOfSupply, splitExclusive, splitInclusive, type GstSeller } from "@/lib/gst";
+import { financialYear, gstReady, gstSeller, invoiceNumber, isGstin, isSeries, placeOfSupply, seriesStart, splitExclusive, splitInclusive, type GstSeller } from "@/lib/gst";
 import { invoiceHtml, invoiceText } from "@/lib/invoice-html";
 import { billUrl } from "@/lib/signing";
 import { sendMail } from "./mailer";
@@ -87,7 +87,9 @@ export async function issueInvoice(
     }
     const [counter] = await tx
       .insert(invoiceCounters)
-      .values({ series: input.series, fy, last: 1 })
+      // The first bill of a series and year starts at 1, or right after the
+      // last number used before this service took over the series (SERIES_START).
+      .values({ series: input.series, fy, last: seriesStart(input.series, fy) + 1 })
       .onConflictDoUpdate({ target: [invoiceCounters.series, invoiceCounters.fy], set: { last: sql`${invoiceCounters.last} + 1` } })
       .returning({ last: invoiceCounters.last });
     const [row] = await tx

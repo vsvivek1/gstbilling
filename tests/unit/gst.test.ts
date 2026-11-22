@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appForRequest, billingApps, manualSeries } from "@/lib/apps";
-import { amountInWords, financialYear, gstPeriod, gstr1Csv, gstr1Kind, gstr1Summary, gstSeller, invoiceNumber, placeOfSupply, splitExclusive, splitInclusive } from "@/lib/gst";
+import { amountInWords, financialYear, gstPeriod, parseInvoiceNumber, seriesStart, gstr1Csv, gstr1Kind, gstr1Summary, gstSeller, invoiceNumber, placeOfSupply, splitExclusive, splitInclusive } from "@/lib/gst";
 import { invoiceHtml } from "@/lib/invoice-html";
 import { rupeesToPaise } from "@/lib/money";
 import { billToken, billTokenOk } from "@/lib/signing";
@@ -34,6 +34,18 @@ describe("GST maths", () => {
     expect(invoiceNumber("QK", "2026-27", 1)).toBe("QK/26-27/000001");
     expect(invoiceNumber("RC", "2026-27", 12)).toBe("RC/26-27/000012");
     expect(invoiceNumber("MN1", "2026-27", 999_999).length).toBe(16);
+    expect(() => invoiceNumber("Q K", "2026-27", 1)).toThrow(/Rule 46/);
+    expect(() => invoiceNumber("MN1", "2026-27", 1_000_000)).toThrow(/Rule 46/);
+  });
+
+  it("continues a series already used elsewhere (SERIES_START)", () => {
+    expect(parseInvoiceNumber("qk/26-27/000153")).toEqual({ series: "QK", fy: "2026-27", seq: 153 });
+    expect(parseInvoiceNumber("QK/26-28/000153")).toBeNull();
+    expect(parseInvoiceNumber("QK/99-00/000001")).toEqual({ series: "QK", fy: "2099-00", seq: 1 });
+    const env = { SERIES_START: "QK/26-27/000153, RC/26-27/000020,QK/27-28/000002" };
+    expect(seriesStart("QK", "2026-27", env)).toBe(153);
+    expect(seriesStart("QK", "2027-28", env)).toBe(2);
+    expect(seriesStart("MN", "2026-27", env)).toBe(0);
   });
 
   it("reads the seller from the environment", () => {

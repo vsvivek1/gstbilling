@@ -47,6 +47,22 @@ describe("issueInvoice", () => {
   });
 });
 
+describe("numbering", () => {
+  it("restarts every 1 April (India time) and continues from SERIES_START", async () => {
+    const lastMarch = new Date("2033-03-31T18:00:00Z"); // 31 Mar 23:30 IST, FY 2032-33
+    const firstApril = new Date("2033-03-31T18:31:00Z"); // 1 Apr 00:01 IST, FY 2033-34
+    process.env.SERIES_START = "RC/32-33/000153";
+    try {
+      const a = await issueInvoice({ ...base, series: "RC", paymentRef: "fy_a", amountPaise: 100 }, db, seller, lastMarch);
+      const b = await issueInvoice({ ...base, series: "RC", paymentRef: "fy_b", amountPaise: 100 }, db, seller, lastMarch);
+      const c = await issueInvoice({ ...base, series: "RC", paymentRef: "fy_c", amountPaise: 100 }, db, seller, firstApril);
+      expect([a.invoice.number, b.invoice.number, c.invoice.number]).toEqual(["RC/32-33/000154", "RC/32-33/000155", "RC/33-34/000001"]);
+    } finally {
+      delete process.env.SERIES_START;
+    }
+  });
+});
+
 describe("POST /api/invoices", () => {
   const call = (body: unknown, key = "qk-key-qk-key-qk-key-qk-key") =>
     POST(new Request("https://bills.test/api/invoices", { method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" }, body: JSON.stringify(body) }));
